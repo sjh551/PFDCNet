@@ -1,6 +1,10 @@
 # Progressive Feature Selection Network with Fault-Aware Deformable Convolution for Railway Fault Detection
-# Abstract
+# 1. Abstract
 ***
+Upgrade later.
 ***
-# Mechanism
-(<img width="1600" height="1600" alt="mechanism" src="https://github.com/user-attachments/assets/e10b1f67-2381-4c14-b66d-33796bf53a1d" />)
+# 2. FrameWork & Mechanism
+***
+![](https://github.com/sjh551/PFDCNet/blob/main/mechanism.png)
+Fig.1 Feature-guided deformable convolution sampling mechanism
+***
