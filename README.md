@@ -6,5 +6,6 @@ Reliable detection of railway track faults is essential for ensuring the safety 
 # 2. FrameWork & Mechanism
 ***
 ![](https://github.com/sjh551/PFDCNet/blob/main/mechanism.png)
-Fig.1 Feature-guided deformable convolution sampling mechanism
+<p align="center">Fig.1 Feature-guided deformable convolution sampling mechanism</p>
+
 ***
