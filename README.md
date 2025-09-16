@@ -1,7 +1,7 @@
 # Progressive Feature Selection Network with Fault-Aware Deformable Convolution for Railway Fault Detection
 # 1. Abstract
 ***
-upgrade later.
+update later.
 ***
 # 2. FrameWork & Mechanism
 ***
