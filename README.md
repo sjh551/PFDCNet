@@ -6,7 +6,7 @@ update later.
 # 2. FrameWork & Mechanism
 ***
 ![](mechanism.png)
-<p align="center">Fig.1 Feature-guided deformable convolution sampling mechanism</p>
+Fig.1 Fault-aware deformable convolution sampling mechanism. DConv denotes deformable convolution. By minimizing the offset loss, the DConv adaptively adjusts its sampling points to focus on defective regions.
 
 
 ***
