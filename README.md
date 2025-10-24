@@ -8,4 +8,35 @@ Visual inspection has become popular for railway track fault identification. How
 ![](mechanism.png)
 Fig.1 Fault-aware deformable convolution sampling mechanism. DConv denotes deformable convolution. By minimizing the offset loss, the DConv adaptively adjusts its sampling points to focus on defective regions.
 
+## 3. Environment Setup
+- **Python**: 3.8+
+- **PyTorch**: 2.2+  
+- **CUDA**: 11.8+  
 
+
+## 4. Dataset Preparation
+The dataset is organized as follows:
+```
+dataset/
+├── train/
+│   ├── Class1/
+│   └── Class2/
+|   └── ...
+├── val/
+│   ├── Class1/
+│   └── Class2/
+|   └── ...
+└── test/
+    ├── Class1/
+    └── Class2/
+    └── ...
+```
+
+Once prepared, you can directly import and load the model file in your own scripts:
+```
+from PFDCNet import PFDCNet,TrainStage
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model = PFDCNet(num_classes=num_classes).to(device)
+model.set_train_stage(TrainStage.STAGE3)
+```
