@@ -664,8 +664,11 @@ class PFDCNet(nn.Module):
         # 构建SelectFormer模块
         self.select_blocks = self._build_select_former_blocks(embed_dim)
        
-        self.stage_weight = nn.Parameter(torch.tensor([0.1, 0.2, 0.3, 0.4]))  # 初始值差异
-        self.loss_weight = nn.Parameter(torch.tensor(-1.0))  # 高斯分布初始化
+        
+        self.stage_weight = nn.Parameter(torch.tensor([-2.0794, -1.3863, -0.6931, 0.0]))  # 初始值差异
+        # -1.3863, -0.6931, -0.2877, 0.0
+        # -2.0794, -1.3863, -0.6931, 0.0  1/15.0, 2/15., 4/15., 8/15.
+        self.loss_weight = nn.Parameter(torch.tensor(1.0))  # 高斯分布初始化
         
         # 特征融合模块
         self.fusion_modules = self._build_fusion_modules()
@@ -686,10 +689,7 @@ class PFDCNet(nn.Module):
                         ),
             
             'stage3': nn.Sequential(
-                        nn.Linear(in_features=1024, out_features=2),  # 原始特征维度147
-                        #nn.ReLU(),
-                        # nn.Dropout(p=0.1),
-                        #nn.Linear(512, num_classes)  # 最终输出2个类别
+                        nn.Linear(in_features=1024, out_features=num_classes),  # 原始特征维度147
                         ),
         })
     
@@ -712,10 +712,6 @@ class PFDCNet(nn.Module):
     def _build_fpn_head(self) -> nn.ModuleDict:
         """构建FPN头部组件"""
         return nn.ModuleDict({
-            # 'toplayer': nn.Conv2d(2048, 256, kernel_size=1),
-            # 'latlayer1': nn.Conv2d(1024, 256, kernel_size=1),
-            # 'latlayer2': nn.Conv2d(512, 256, kernel_size=1),
-            # 'latlayer3': nn.Conv2d(256, 256, kernel_size=1),
             'smooth': nn.Conv2d(256, 256, kernel_size=3, padding=1)
         })
     
@@ -749,12 +745,10 @@ class PFDCNet(nn.Module):
         t4,_ = self.select_blocks[3](t3)
         t5,_ = self.select_blocks[4](t4)
 
-        
+
         t6 = torch.cat((t5[:, 0],t5[:,1]),dim=1)
         # [处理transformer特征...]
         logits = self.classifiers['stage2'](t6)
-
-        # logits = self.classifiers['stage2'](trans_feat[:,0])
         return logits, 0,0
     
     def _forward_stage3(self, x: torch.Tensor) -> tuple:
@@ -765,29 +759,31 @@ class PFDCNet(nn.Module):
         # 处理Transformer分支
         trans_feat = self.transformer_branch(x)
         
-        t1,keep_indices_old = self.select_blocks[0](trans_feat)   # (B,32*32,147) --->(B,16*16,147)
-        # print(keep_indices_old)
-        t2,keep_indices_old = self.select_blocks[1](t1,keep_indices_old)       # (B,16*16,147)  --->(B,8*8,147)
-        # print(keep_indices_old)
+        t1,_ = self.select_blocks[0](trans_feat)   # (B,32*32,147) --->(B,16*16,147)
+        t2,_ = self.select_blocks[1](t1)       # (B,16*16,147)  --->(B,8*8,147)
+
         fusfeat1,t2,loss1 = self.fusion_modules['fusion1'](t2,resnet_feats['c2'])     # fusfeat1:(256,56,56)
-        t3,keep_indices_old = self.select_blocks[2](t2,keep_indices_old)       # (B,8*8,147)  --->(B,4*4,147)
-        # print(keep_indices_old)
+        t3,_ = self.select_blocks[2](t2)       # (B,8*8,147)  --->(B,4*4,147)
         fusfeat2,t3,loss2 = self.fusion_modules['fusion2'](t3,resnet_feats['c3'])     # fusfeat2:(512,28,28)
-        t4,keep_indices_old = self.select_blocks[3](t3,keep_indices_old)
-        # print(keep_indices_old)
+        t4,_ = self.select_blocks[3](t3)
         fusfeat3,t4,loss3 = self.fusion_modules['fusion3'](t4,resnet_feats['c4'])     # fusfeat3:(1024,14,14)
-        t5,final_pos,final_idx = self.select_blocks[4](t4,keep_indices_old,return_pos=True)
+        t5,_ = self.select_blocks[4](t4)
         fusfeat4,t5,loss4 = self.fusion_modules['fusion4'](t5,resnet_feats['c5'])     # fusfeat4:(2048,7,7)
+
 
         w1 = torch.exp(self.stage_weight[0]) / torch.sum(torch.exp(self.stage_weight))
         w2 = torch.exp(self.stage_weight[1]) / torch.sum(torch.exp(self.stage_weight))
         w3 = torch.exp(self.stage_weight[2]) / torch.sum(torch.exp(self.stage_weight))
         w4 = torch.exp(self.stage_weight[3]) / torch.sum(torch.exp(self.stage_weight))
         
-        loss_weight = torch.exp(self.loss_weight)
+        # print(f"stage_weight={w1},{w2},{w3},{w4}")        
+        # print(f"loss={loss1},{loss2},{loss3},{loss4}")  
+        # loss_weight = torch.exp(self.loss_weight)
+        loss_weight = 0.1 + 9.9*torch.sigmoid(self.loss_weight)
 
-        total_loss = loss_weight*sum(w * loss for w, loss in zip([w1,w2,w3,w4], [loss1, loss2, loss3, loss4]))
-        
+        total_loss = loss_weight*sum(w * loss for w, loss in zip([w1,w2,w3, w4], [loss1, loss2, loss3, loss4]))
+        # [w1,w2.,w3, w4]
+        # print(f"loss={1/15.0 * loss1},{2/15.0*loss2},{4/15.0*loss3},{8/15.0*loss4}")  
         # FPN计算
         p3 = self._upsample_add(fusfeat4, fusfeat3)
         p2 = self._upsample_add(p3, fusfeat2)
@@ -798,10 +794,12 @@ class PFDCNet(nn.Module):
         pool3 = self.resnet_branch.avgpool(p3).flatten(1)
         pool4 = self.resnet_branch.avgpool(fusfeat4).flatten(1)
         out = torch.cat((pool1,pool2,pool3,pool4),dim=1)
+        # out = torch.cat((pool1,pool2,pool3,pool4),dim=1)
+
         # 分类输出
         logits = self.classifiers['stage3'](out)
         
-        return logits, total_loss,loss_weight,final_idx,final_pos   # 后面两个参数是为了画图需要，实际训练的时候直接删掉
+        return logits, total_loss,loss_weight
     
     
     def set_train_stage(self, stage: TrainStage):
@@ -829,29 +827,10 @@ class PFDCNet(nn.Module):
                     param.requires_grad = True
 
 
-def visualize_selected_patches(image, position_tensor):
-    """
-    image: 原始图像 [H,W,C]
-    position_tensor: 选中Patch的坐标 [keep_num, 4]
-    """
-    fig, ax = plt.subplots(1)
-    ax.imshow(image)
-
-    if isinstance(position_tensor, torch.Tensor):
-        position_tensor = position_tensor.cpu().numpy()
-    else:
-        position_tensor = position_tensor # 如果它已经是 NumPy 数组，则直接使用
-    
-    for box in position_tensor:
-        x1, y1, x2, y2 = box
-        
-        rect = patches.Rectangle(
-            (x1, y1),  # 左上角坐标
-            x2 - x1,   # 宽度
-            y2 - y1,   # 高度
-            linewidth=2, 
-            edgecolor='r',  # 红色边框
-            facecolor='none'  # 无填充
-        )
-        ax.add_patch(rect)
-    plt.show()
+if __name__=="__main__":
+    '''resnet50'''
+    x = torch.randn(1, 3, 224, 224)
+    model = PFDCNet()
+    model.set_train_stage(TrainStage.STAGE3)
+    y,_,_ = model(x)
+    print(y.shape)
